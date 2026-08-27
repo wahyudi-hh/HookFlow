@@ -2,6 +2,7 @@ package event
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -15,15 +16,36 @@ func NewHandler(service EventService) *Handler {
 	return &Handler{service: service}
 }
 
+type ErrorResponse struct {
+	Error ErrorDetail `json:"error"`
+}
+
+type ErrorDetail struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func writeError(w http.ResponseWriter, status int, code string, message string) {
+	response := ErrorResponse{
+		Error: ErrorDetail{
+			Code:    code,
+			Message: message,
+		},
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(response)
+}
+
 func (h *Handler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	var request EventRequest
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "Invalid JSON payload")
 		return
 	}
 	if request.EventID == "" || request.Type == "" {
-		http.Error(w, "Missing event_id or type fields", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "MISSING_FIELDS", "Missing event_id or type fields")
 		return
 	}
 
@@ -33,7 +55,11 @@ func (h *Handler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 
 	createdEvent, err := h.service.CreateEvent(r.Context(), clientID, request)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		if errors.Is(err, ErrorDuplicateEvent) {
+			writeError(w, http.StatusConflict, "EVENT_ALREADY_EXISTS", "Event with the same event_id already exists")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "INTERNAL_SERVER_ERROR", "An internal error occurred")
 		return
 	}
 

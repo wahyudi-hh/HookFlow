@@ -2,9 +2,11 @@ package event
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -29,6 +31,10 @@ func (r *Repository) CreateEvent(ctx context.Context, event Event) error {
 		VALUES ($1, $2, $3, $4, $5)`,
 		event.ID, event.Type, event.ClientID, event.ClientEventId, event.Payload)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return ErrorDuplicateEvent
+		}
 		return fmt.Errorf("failed to insert event: %w", err)
 	}
 
