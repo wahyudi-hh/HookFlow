@@ -46,8 +46,12 @@ func main() {
 	}
 	defer pool.Close()
 
+	repository := event.NewRepository(pool)
+	service := event.NewService(repository)
+	handler := event.NewHandler(service)
+
 	http.HandleFunc("GET /health", healthHandler)
-	http.HandleFunc("POST /v1/events", event.CreateEventHandler)
+	http.HandleFunc("POST /v1/events", handler.CreateEvent)
 
 	fmt.Println("API server listening on :8080")
 
