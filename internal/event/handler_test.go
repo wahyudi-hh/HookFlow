@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/wahyudi-hh/HookFlow/internal/api"
 )
 
 type mockEventService struct{
@@ -59,7 +60,7 @@ func TestCreateEventHandler_InvalidJSON(t *testing.T) {
 		t.Fatalf("Expected status code %d, got %d", http.StatusBadRequest, response.Code)
 	}
 
-	var responseBody ErrorResponse
+	var responseBody api.ErrorResponse
 	err := json.NewDecoder(response.Body).Decode(&responseBody)
 	if err != nil {
 		t.Fatalf("Failed to decode response body: %v", err)
@@ -81,7 +82,7 @@ func TestCreateEventHandler_MissingEventID(t *testing.T) {
 		t.Fatalf("Expected status code %d, got %d", http.StatusBadRequest, response.Code)
 	}
 
-	var responseBody ErrorResponse
+	var responseBody api.ErrorResponse
 	err := json.NewDecoder(response.Body).Decode(&responseBody)
 	if err != nil {
 		t.Fatalf("Failed to decode response body: %v", err)
@@ -103,7 +104,7 @@ func TestCreateEvent_MissingType(t *testing.T) {
 		t.Fatalf("Expected status code %d, got %d", http.StatusBadRequest, response.Code)
 	}
 
-	var responseBody ErrorResponse
+	var responseBody api.ErrorResponse
 	err := json.NewDecoder(response.Body).Decode(&responseBody)
 	if err != nil {
 		t.Fatalf("Failed to decode response body: %v", err)
@@ -126,7 +127,7 @@ func TestCreateEventHandler_DuplicateEvent(t *testing.T) {
 		t.Fatalf("Expected status code %d, got %d", http.StatusConflict, response.Code)
 	}
 
-	var responseBody ErrorResponse
+	var responseBody api.ErrorResponse
 	err := json.NewDecoder(response.Body).Decode(&responseBody)
 	if err != nil {
 		t.Fatalf("Failed to decode response body: %v", err)
@@ -150,7 +151,7 @@ func TestCreateEventHandler_InternalError(t *testing.T) {
 	if response.Code != http.StatusInternalServerError {
 		t.Fatalf("Expected status code %d, got %d", http.StatusInternalServerError, response.Code)
 	}
-	var responseBody ErrorResponse
+	var responseBody api.ErrorResponse
 	err := json.NewDecoder(response.Body).Decode(&responseBody)
 	if err != nil {
 		t.Fatalf("Failed to decode response body: %v", err)

@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/joho/godotenv"
+	"github.com/wahyudi-hh/HookFlow/internal/auth"
+	"github.com/wahyudi-hh/HookFlow/internal/client"
 	"github.com/wahyudi-hh/HookFlow/internal/config"
 	"github.com/wahyudi-hh/HookFlow/internal/db"
 	"github.com/wahyudi-hh/HookFlow/internal/event"
@@ -46,12 +49,19 @@ func main() {
 	}
 	defer pool.Close()
 
-	repository := event.NewRepository(pool)
-	service := event.NewService(repository)
-	handler := event.NewHandler(service)
+	eventRepository := event.NewRepository(pool)
+	eventService := event.NewService(eventRepository)
+	eventHandler := event.NewHandler(eventService)
+
+	clientRepository := client.NewRepository(pool)
+	appSecret := os.Getenv("APP_SECRET_KEY")
+	if appSecret == "" {
+		log.Fatal("APP_SECRET_KEY is required")
+	}
+	authenticator := auth.NewAuthenticator(clientRepository, appSecret)
 
 	http.HandleFunc("GET /health", healthHandler)
-	http.HandleFunc("POST /v1/events", handler.CreateEvent)
+	http.Handle("POST /v1/events", authenticator.Middleware(http.HandlerFunc(eventHandler.CreateEvent)))
 
 	fmt.Println("API server listening on :8080")
 
