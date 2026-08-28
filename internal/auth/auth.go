@@ -25,6 +25,10 @@ type Authenticator struct {
 	appSecret 	string
 }
 
+func WithClientID(ctx context.Context, clientID uuid.UUID) context.Context {
+	return context.WithValue(ctx, clientIDKey{}, clientID)
+}
+
 func ClientID(ctx context.Context) (uuid.UUID, bool) {
 	clientID, ok := ctx.Value(clientIDKey{}).(uuid.UUID)
 	return clientID, ok
@@ -58,8 +62,7 @@ func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 			api.WriteError(w, http.StatusInternalServerError, "INTERNAL_SERVER_ERROR", "An internal error occurred")
 			return
 		}
-		ctx := context.WithValue(r.Context(), clientIDKey{}, client.ID)
-
+		ctx := WithClientID(r.Context(), client.ID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

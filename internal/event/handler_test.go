@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/wahyudi-hh/HookFlow/internal/api"
+	"github.com/wahyudi-hh/HookFlow/internal/auth"
 )
 
 type mockEventService struct{
@@ -35,9 +36,18 @@ func newTestHandler() *Handler {
 	return NewHandler(service)
 }
 
+func addClientID(req *http.Request) *http.Request {
+	clientID := uuid.New()
+
+	ctx := auth.WithClientID(req.Context(), clientID)
+
+	return req.WithContext(ctx)
+}
+
 func TestCreateEventHandler(t *testing.T) {
 	body := `{"event_id": "123", "type": "order.completed", "payload": {"order_id": "order-123"}}`
 	req := httptest.NewRequest("POST", "/v1/events", strings.NewReader(body))
+	req = addClientID(req)
 	response := httptest.NewRecorder()
 
 	handler := newTestHandler()
@@ -119,6 +129,7 @@ func TestCreateEventHandler_DuplicateEvent(t *testing.T) {
 	handler := NewHandler(service)
 	body := `{"event_id": "123", "type": "order.completed", "payload": {"order_id": "order-123"}}`
 	req := httptest.NewRequest("POST", "/v1/events", strings.NewReader(body))
+	req = addClientID(req)
 	response := httptest.NewRecorder()
 
 	handler.CreateEvent(response, req)
@@ -144,6 +155,7 @@ func TestCreateEventHandler_InternalError(t *testing.T) {
 	handler := NewHandler(service)
 	body := `{"event_id": "123", "type": "order.completed", "payload": {"order_id": "order-123"}}`
 	req := httptest.NewRequest("POST", "/v1/events", strings.NewReader(body))
+	req = addClientID(req)
 	response := httptest.NewRecorder()
 
 	handler.CreateEvent(response, req)
