@@ -114,3 +114,14 @@ func (r *Repository) MarkOutboxEventPublished(ctx context.Context, id uuid.UUID)
 	)
 	return err
 }
+
+func (r *Repository) MarkOutboxEventFailed(
+	ctx context.Context, id uuid.UUID, publishErr error, nextRetryAt time.Time) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE outbox_events
+		SET status = 'PENDING', attempt_count = attempt_count + 1, last_error = $2, next_retry_at = $3
+		WHERE id = $3`,
+		id, publishErr.Error(), nextRetryAt,
+	)
+	return err
+}

@@ -6,3 +6,6 @@ database:
   port: 5432
   name: hookflow
   user: hookflow
+
+outbox:
+  retry_delay_seconds: 30

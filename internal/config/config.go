@@ -10,6 +10,7 @@ import (
 type Config struct {
 	Server ServerConfig `yaml:"server"`
 	Database DatabaseConfig `yaml:"database"`
+	Outbox OutboxConfig `yaml:"outbox"`
 }
 
 type ServerConfig struct {
@@ -22,6 +23,10 @@ type DatabaseConfig struct {
 	Name     string `yaml:"name"`
 	User     string `yaml:"user"`
 	Password string
+}
+
+type OutboxConfig struct {
+	RetryDelaySeconds int `yaml:"retry_delay_seconds"`
 }
 
 func Load(path string) (*Config, error) {

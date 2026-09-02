@@ -32,7 +32,7 @@ func main() {
 
 	repository := event.NewRepository(pool)
 	publisher := event.NewLogPublisher()
-	worker := event.NewOutboxWorker(repository, publisher)
+	worker := event.NewOutboxWorker(repository, publisher, cfg.Outbox.RetryDelaySeconds)
 
 	if err := worker.ProcessOne(context.Background()); err != nil {
 		log.Fatal(err)
