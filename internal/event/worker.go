@@ -5,19 +5,25 @@ import (
 	"errors"
 	"log"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
 type OutboxWorker struct {
-	repository *Repository
+	repository OutboxRepository
 	publisher Publisher
 }
 
-func NewOutboxWorker(repository *Repository, publisher Publisher) *OutboxWorker {
+func NewOutboxWorker(repository OutboxRepository, publisher Publisher) *OutboxWorker {
 	return &OutboxWorker{
 		repository: repository,
 		publisher: publisher,
 	}
+}
+
+type OutboxRepository interface {
+	GetPendingOutboxEvents(ctx context.Context) (*OutboxEvent, error)
+	MarkOutboxEventPublished(ctx context.Context, id uuid.UUID) error
 }
 
 func (w *OutboxWorker) ProcessOne(ctx context.Context) error {
