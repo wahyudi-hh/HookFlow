@@ -84,6 +84,7 @@ func (r *Repository) GetPendingOutboxEvents(ctx context.Context) (*OutboxEvent, 
 		FROM outbox_events o
 		JOIN events e ON o.event_id = e.id
 		WHERE o.status = 'PENDING'
+			AND (o.next_retry_at IS NULL OR o.next_retry_at <= NOW())
 		ORDER BY e.created_at
 		LIMIT 1`,
 	).Scan(
