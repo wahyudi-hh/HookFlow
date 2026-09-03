@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"log"
+	"os"
+	"os/signal"
 
 	"github.com/joho/godotenv"
 	"github.com/wahyudi-hh/HookFlow/internal/config"
@@ -32,9 +34,19 @@ func main() {
 
 	repository := event.NewRepository(pool)
 	publisher := event.NewLogPublisher()
-	worker := event.NewOutboxWorker(repository, publisher, cfg.Outbox.RetryDelaySeconds)
+	worker := event.NewOutboxWorker(repository, publisher, cfg.Outbox.RetryDelaySeconds, cfg.Outbox.PollIntervalSeconds)
 
-	if err := worker.ProcessOne(context.Background()); err != nil {
-		log.Fatal(err)
-	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, os.Interrupt)
+	
+	go func() {
+		<-signalChan
+		log.Println("Received interrupt signal, shutting down...")
+		cancel()
+	}()
+
+	worker.Run(ctx)
 }

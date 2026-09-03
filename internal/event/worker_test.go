@@ -22,6 +22,7 @@ type mockOutboxRepository struct {
 }
 
 const testRetryDelaySeconds = 30
+const testPollIntervalSeconds = 5
 
 type mockPublisher struct {
 	err error
@@ -69,7 +70,7 @@ func TestOutboxWorker_ProcessOne(t *testing.T) {
 
 	publisher := &mockPublisher{}
 
-	worker := NewOutboxWorker(repository, publisher, testRetryDelaySeconds)
+	worker := NewOutboxWorker(repository, publisher, testRetryDelaySeconds, testPollIntervalSeconds)
 
 	err := worker.ProcessOne(context.Background())
 
@@ -97,7 +98,7 @@ func TestOutboxWorker_ProcessOne_NoPendingEvents(t *testing.T) {
 
 	publisher := &mockPublisher{}
 
-	worker := NewOutboxWorker(repository, publisher, testRetryDelaySeconds)
+	worker := NewOutboxWorker(repository, publisher, testRetryDelaySeconds, testPollIntervalSeconds)
 
 	err := worker.ProcessOne(context.Background())
 
@@ -125,7 +126,7 @@ func TestOutboxWorker_ProcessOne_PublishFails(t *testing.T) {
 		err: errors.New("publish failed"),
 	}
 
-	worker := NewOutboxWorker(repository, publisher, testRetryDelaySeconds)
+	worker := NewOutboxWorker(repository, publisher, testRetryDelaySeconds, testPollIntervalSeconds)
 
 	before := time.Now()
 

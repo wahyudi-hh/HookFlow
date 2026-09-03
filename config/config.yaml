@@ -9,3 +9,4 @@ database:
 
 outbox:
   retry_delay_seconds: 30
+  poll_interval_seconds: 10

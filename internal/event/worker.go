@@ -14,13 +14,15 @@ type OutboxWorker struct {
 	repository 			OutboxRepository
 	publisher 			Publisher
 	retryDelaySeconds 	int
+	pollIntervalSeconds int
 }
 
-func NewOutboxWorker(repository OutboxRepository, publisher Publisher, retryDelaySeconds int) *OutboxWorker {
+func NewOutboxWorker(repository OutboxRepository, publisher Publisher, retryDelaySeconds int, pollIntervalSeconds int) *OutboxWorker {
 	return &OutboxWorker{
 		repository: 		repository,
 		publisher: 			publisher,
 		retryDelaySeconds: 	retryDelaySeconds,
+		pollIntervalSeconds: pollIntervalSeconds,
 	}
 }
 
@@ -54,4 +56,22 @@ func (w *OutboxWorker) ProcessOne(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (w *OutboxWorker) Run(ctx context.Context) {
+	ticker := time.NewTicker(time.Duration(w.pollIntervalSeconds) * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			if err := w.ProcessOne(ctx); err != nil {
+				log.Printf("Error processing outbox event: %v", err)
+			}
+		
+		case <-ctx.Done():
+			log.Println("Outbox worker stopped")
+			return
+		}
+	}
 }

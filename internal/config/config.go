@@ -26,7 +26,8 @@ type DatabaseConfig struct {
 }
 
 type OutboxConfig struct {
-	RetryDelaySeconds int `yaml:"retry_delay_seconds"`
+	RetryDelaySeconds 	int `yaml:"retry_delay_seconds"`
+	PollIntervalSeconds int `yaml:"poll_interval_seconds"`
 }
 
 func Load(path string) (*Config, error) {
