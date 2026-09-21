@@ -67,7 +67,7 @@ func (r *Repository) CreateEvent(ctx context.Context, event Event) error {
 	return nil
 }
 
-func (r *Repository) GetPendingOutboxEvents(ctx context.Context) (*OutboxEvent, error) {
+func (r *Repository) GetPendingOutboxEvent(ctx context.Context) (*OutboxEvent, error) {
 	var outboxEvent OutboxEvent
 
 	err := r.db.QueryRow(ctx, `

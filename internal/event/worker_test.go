@@ -29,7 +29,7 @@ type mockPublisher struct {
 	publishedEvent *OutboxEvent
 }
 
-func (m *mockOutboxRepository) GetPendingOutboxEvents(ctx context.Context) (*OutboxEvent, error) {
+func (m *mockOutboxRepository) GetPendingOutboxEvent(ctx context.Context) (*OutboxEvent, error) {
 	return m.event, m.getErr
 }
 

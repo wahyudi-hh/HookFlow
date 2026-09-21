@@ -27,13 +27,13 @@ func NewOutboxWorker(repository OutboxRepository, publisher Publisher, retryDela
 }
 
 type OutboxRepository interface {
-	GetPendingOutboxEvents(ctx context.Context) (*OutboxEvent, error)
+	GetPendingOutboxEvent(ctx context.Context) (*OutboxEvent, error)
 	MarkOutboxEventPublished(ctx context.Context, id uuid.UUID) error
 	MarkOutboxEventFailed(ctx context.Context, id uuid.UUID, publishErr error, nextRetryAt time.Time) error
 }
 
 func (w *OutboxWorker) ProcessOne(ctx context.Context) error {
-	outboxEvent, err := w.repository.GetPendingOutboxEvents(ctx)
+	outboxEvent, err := w.repository.GetPendingOutboxEvent(ctx)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			log.Println("No pending outbox events found")
