@@ -62,15 +62,59 @@ func (w *OutboxWorker) Run(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(w.pollIntervalSeconds) * time.Second)
 	defer ticker.Stop()
 
+	processing := false
+	result := make(chan error, 1)
+	var cancelOperation context.CancelFunc
+
 	for {
 		select {
 		case <-ticker.C:
-			if err := w.ProcessOne(ctx); err != nil {
+			if processing {
+				continue
+			}
+
+			processing = true
+			operationCtx, cancel := context.WithCancel(context.Background())
+			cancelOperation = cancel
+			go func() {
+				err := w.ProcessOne(operationCtx)
+				result <- err
+			}()
+
+		case err := <-result :
+			processing = false
+			cancelOperation()
+			cancelOperation = nil
+			
+			if err != nil {
 				log.Printf("Error processing outbox event: %v", err)
 			}
 		
 		case <-ctx.Done():
-			log.Println("Outbox worker stopped")
+			log.Println("Outbox worker shutting down...")
+
+			shutdownTimer := time.NewTimer(10 * time.Second)
+			defer shutdownTimer.Stop()
+
+			select {
+			case err := <- result :
+				if err != nil {
+					log.Printf("Error processing outbox event: %v", err)
+				}
+				cancelOperation()
+    			cancelOperation = nil
+				log.Printf("Current operation finished");
+
+			case <- shutdownTimer.C :
+				log.Printf("Shutdown grace period expired")
+				cancelOperation()
+
+				err := <-result
+				if err != nil {
+					log.Printf("Error processing outbox event: %v", err)
+				}
+			}
+            log.Println("Outbox worker stopped")
 			return
 		}
 	}
