@@ -67,10 +67,16 @@ func (r *Repository) CreateEvent(ctx context.Context, event Event) error {
 	return nil
 }
 
-func (r *Repository) GetPendingOutboxEvent(ctx context.Context) (*OutboxEvent, error) {
+func (r *Repository) ClaimNextOutboxEvent(ctx context.Context) (*OutboxEvent, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
 	var outboxEvent OutboxEvent
 
-	err := r.db.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		SELECT 
 			o.id, 
 			o.event_id, 
@@ -83,11 +89,18 @@ func (r *Repository) GetPendingOutboxEvent(ctx context.Context) (*OutboxEvent, e
 			e.payload
 		FROM outbox_events o
 		JOIN events e ON o.event_id = e.id
-		WHERE o.status = 'PENDING'
+		WHERE (
+			o.status = 'PENDING'
 			AND (o.next_retry_at IS NULL OR o.next_retry_at <= NOW())
+		)
+		OR (
+			o.status = 'PROCESSING'
+			AND o.lease_until <= NOW()
+		)
 		ORDER BY e.created_at
-		LIMIT 1`,
-	).Scan(
+		FOR UPDATE OF o SKIP LOCKED
+		LIMIT 1
+	`).Scan(
 		&outboxEvent.ID,
 		&outboxEvent.EventID,
 		&outboxEvent.Topic,
@@ -102,14 +115,28 @@ func (r *Repository) GetPendingOutboxEvent(ctx context.Context) (*OutboxEvent, e
 	if err != nil {
 		return nil, err
 	}
-	
-	return &outboxEvent, nil
+
+	_,err = tx.Exec(ctx, `
+		UPDATE outbox_events
+		SET status = 'PROCESSING', lease_until = NOW() + INTERVAL '30 seconds'
+		WHERE id = $1
+	`, outboxEvent.ID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+        return nil, err
+    }
+
+    return &outboxEvent, nil
 }
 
 func (r *Repository) MarkOutboxEventPublished(ctx context.Context, id uuid.UUID) error {
 	_, err := r.db.Exec(ctx, 
 		`UPDATE outbox_events
-		SET status = 'PUBLISHED', published_at = NOW()
+		SET status = 'PUBLISHED', published_at = NOW(), lease_until = NULL
 		WHERE id = $1`,
 		id,
 	)
@@ -120,8 +147,8 @@ func (r *Repository) MarkOutboxEventFailed(
 	ctx context.Context, id uuid.UUID, publishErr error, nextRetryAt time.Time) error {
 	_, err := r.db.Exec(ctx,
 		`UPDATE outbox_events
-		SET status = 'PENDING', attempt_count = attempt_count + 1, last_error = $2, next_retry_at = $3
-		WHERE id = $3`,
+		SET status = 'PENDING', attempt_count = attempt_count + 1, last_error = $2, next_retry_at = $3, lease_until = NULL
+		WHERE id = $1`,
 		id, publishErr.Error(), nextRetryAt,
 	)
 	return err
