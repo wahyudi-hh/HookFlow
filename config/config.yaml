@@ -10,3 +10,7 @@ database:
 outbox:
   retry_delay_seconds: 30
   poll_interval_seconds: 10
+
+kafka:
+  broker: localhost:9092
+  topic: hookflow.events

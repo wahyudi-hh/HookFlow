@@ -33,7 +33,7 @@ func main() {
 	defer pool.Close()
 
 	repository := event.NewRepository(pool)
-	publisher := event.NewLogPublisher()
+	publisher := event.NewKafkaPublisher(cfg.Kafka.Broker, cfg.Kafka.Topic)
 	worker := event.NewOutboxWorker(repository, publisher, cfg.Outbox.RetryDelaySeconds, cfg.Outbox.PollIntervalSeconds)
 
 	ctx, cancel := context.WithCancel(context.Background())

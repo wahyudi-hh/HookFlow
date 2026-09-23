@@ -11,6 +11,7 @@ type Config struct {
 	Server ServerConfig `yaml:"server"`
 	Database DatabaseConfig `yaml:"database"`
 	Outbox OutboxConfig `yaml:"outbox"`
+	Kafka KafkaConfig `yaml:"kafka"`
 }
 
 type ServerConfig struct {
@@ -28,6 +29,11 @@ type DatabaseConfig struct {
 type OutboxConfig struct {
 	RetryDelaySeconds 	int `yaml:"retry_delay_seconds"`
 	PollIntervalSeconds int `yaml:"poll_interval_seconds"`
+}
+
+type KafkaConfig struct {
+	Broker string `yaml:"broker"`
+	Topic string `yaml:"topic"`
 }
 
 func Load(path string) (*Config, error) {
