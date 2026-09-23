@@ -34,6 +34,7 @@ type OutboxConfig struct {
 type KafkaConfig struct {
 	Broker string `yaml:"broker"`
 	Topic string `yaml:"topic"`
+	ConsumerGroup string `yaml:"consumer_group"`
 }
 
 func Load(path string) (*Config, error) {

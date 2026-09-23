@@ -14,3 +14,4 @@ outbox:
 kafka:
   broker: localhost:9092
   topic: hookflow.events
+  consumer_group: hookflow-consumers
