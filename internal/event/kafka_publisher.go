@@ -15,6 +15,7 @@ func NewKafkaPublisher(brokerAdress, topic string) *KafkaPublisher {
 	writer := &kafka.Writer{
 		Addr: kafka.TCP(brokerAdress),
 		Topic: topic,
+		Balancer: &kafka.Hash{},
 	}
 
 	return &KafkaPublisher{

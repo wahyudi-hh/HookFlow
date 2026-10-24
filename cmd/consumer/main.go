@@ -9,6 +9,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/wahyudi-hh/HookFlow/internal/config"
+	"github.com/wahyudi-hh/HookFlow/internal/db"
 	"github.com/wahyudi-hh/HookFlow/internal/event"
 )
 
@@ -30,6 +31,12 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	pool, err := db.NewPostgresPool(ctx, cfg.Database)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer pool.Close()
+
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
 
@@ -40,7 +47,8 @@ func main() {
 	}()
 
 	logger := log.Default()
-	handler := event.NewLoggingEventHandler(logger)
+	repo := event.NewRepository(pool)
+	handler := event.NewIdempotentEventHandler(pool, repo, logger)
 
 	for {
 		message, err := consumer.Fetch(ctx)

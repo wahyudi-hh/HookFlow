@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -152,4 +153,18 @@ func (r *Repository) MarkOutboxEventFailed(
 		id, publishErr.Error(), nextRetryAt,
 	)
 	return err
+}
+
+func (r *Repository) MarkEventProcessed(ctx context.Context, tx pgx.Tx, eventID uuid.UUID) (bool, error) {
+	result, err := tx.Exec(ctx, 
+		`INSERT INTO processed_events (event_id)
+		VALUES ($1)
+		ON CONFLICT (event_id) DO NOTHING`,
+		eventID)
+	
+	if err != nil {
+		return false, err
+	}
+
+	return result.RowsAffected() == 1, nil
 }
