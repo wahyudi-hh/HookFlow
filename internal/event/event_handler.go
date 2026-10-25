@@ -6,6 +6,8 @@ import (
 	"log"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/segmentio/kafka-go"
 )
@@ -14,23 +16,68 @@ type EventHandler interface {
 	Handle(ctx context.Context, message kafka.Message) error
 }
 
-type LoggingEventHandler struct {
-	logger *log.Logger
+type EventTransaction interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	Commit(ctx context.Context) error
+	Rollback(ctx context.Context) error
 }
 
-func NewLoggingEventHandler(logger *log.Logger) *LoggingEventHandler {
-	return &(LoggingEventHandler{
-		logger: logger,
-	})
+type EventDatabase interface {
+	Begin(ctx context.Context) (EventTransaction, error)
+}
+
+type ProcessedEventRepository interface {
+	MarkEventProcessed(
+		ctx context.Context,
+		tx ProcessedEventTx,
+		eventID uuid.UUID,
+	) (bool, error)
+}
+
+type PostgresEventTransaction struct {
+	tx pgx.Tx
+}
+
+func (t *PostgresEventTransaction) Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
+	return t.tx.Exec(ctx, sql, arguments...)
+}
+
+func (t *PostgresEventTransaction) Commit(ctx context.Context) error {
+	return t.tx.Commit(ctx)
+}
+
+func (t *PostgresEventTransaction) Rollback(ctx context.Context) error {
+	return t.tx.Rollback(ctx)
+}
+ 
+type PostgresEventDatabase struct {
+	pool *pgxpool.Pool
+}
+
+func NewPostgresEventDatabase(pool *pgxpool.Pool) *PostgresEventDatabase {
+	return &PostgresEventDatabase{pool: pool}
+}
+
+func (d *PostgresEventDatabase) Begin(ctx context.Context) (EventTransaction, error) {
+	tx, err := d.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	
+	return &PostgresEventTransaction{tx: tx}, nil
 }
 
 type IdempotentEventHandler struct {
-	db *pgxpool.Pool
-	repo *Repository
+	db EventDatabase
+	repo ProcessedEventRepository
 	logger *log.Logger
 }
 
-func NewIdempotentEventHandler(db *pgxpool.Pool, repo *Repository, logger *log.Logger) *IdempotentEventHandler {
+func NewIdempotentEventHandler(
+	db EventDatabase,
+	repo ProcessedEventRepository,
+	logger *log.Logger,
+) *IdempotentEventHandler {
 	return &IdempotentEventHandler{
 		db: db,
 		repo: repo,
@@ -38,44 +85,34 @@ func NewIdempotentEventHandler(db *pgxpool.Pool, repo *Repository, logger *log.L
 	}
 }
 
-func (h *LoggingEventHandler) Handle(ctx context.Context, message kafka.Message) error {
-	h.logger.Printf(
-		"Processing event: topic=%s partition=%d offset=%d key=%s value=%s",
-        message.Topic,
-        message.Partition,
-        message.Offset,
-        string(message.Key),
-        string(message.Value),
-	)
-
-	return nil
-}
-
 func (h *IdempotentEventHandler) Handle(ctx context.Context, message kafka.Message) error {
 	// The Kafka message key contains our internal event UUID.
 	eventId, err := uuid.Parse(string(message.Key))
 	if err != nil {
-		return fmt.Errorf("Invalid event ID in message key %q: %w", message.Key, err)
+		return fmt.Errorf("invalid event ID in message key %q: %w", message.Key, err)
 	}
 
 	tx, err := h.db.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("Error begin transaction: %w", err)
+		return fmt.Errorf("begin transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
 	processed, err := h.repo.MarkEventProcessed(ctx, tx, eventId)
 	if err != nil {
-		return fmt.Errorf("Error mark event as processed: %w", err)		
+		return fmt.Errorf("mark event as processed: %w", err)		
 	}
 
 	if !processed {
 		h.logger.Printf("Skipping duplicate event: event ID=%s", eventId)
-		return tx.Commit(ctx)
+		if err := tx.Commit(ctx); err != nil {
+			return fmt.Errorf("commit duplicate event transaction: %w", err)
+		}
+		return nil
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("Error commiting event process transaction: %w", err)
+		return fmt.Errorf("commiting event process transaction: %w", err)
 	}
 
 	h.logger.Printf("Processed event: event id: %s", eventId)

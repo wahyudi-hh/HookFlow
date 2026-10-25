@@ -7,10 +7,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+type ProcessedEventTx interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+}
 
 type Repository struct {
 	db *pgxpool.Pool
@@ -155,7 +158,7 @@ func (r *Repository) MarkOutboxEventFailed(
 	return err
 }
 
-func (r *Repository) MarkEventProcessed(ctx context.Context, tx pgx.Tx, eventID uuid.UUID) (bool, error) {
+func (r *Repository) MarkEventProcessed(ctx context.Context, tx ProcessedEventTx, eventID uuid.UUID) (bool, error) {
 	result, err := tx.Exec(ctx, 
 		`INSERT INTO processed_events (event_id)
 		VALUES ($1)

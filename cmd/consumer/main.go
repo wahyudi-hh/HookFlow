@@ -48,7 +48,8 @@ func main() {
 
 	logger := log.Default()
 	repo := event.NewRepository(pool)
-	handler := event.NewIdempotentEventHandler(pool, repo, logger)
+	eventDB := event.NewPostgresEventDatabase(pool)
+	handler := event.NewIdempotentEventHandler(eventDB, repo, logger)
 
 	for {
 		message, err := consumer.Fetch(ctx)
