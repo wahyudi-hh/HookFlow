@@ -62,60 +62,70 @@ func (w *OutboxWorker) Run(ctx context.Context) {
 	ticker := time.NewTicker(time.Duration(w.pollIntervalSeconds) * time.Second)
 	defer ticker.Stop()
 
-	processing := false
-	result := make(chan error, 1)
-	var cancelOperation context.CancelFunc
+	type result struct {
+		err error
+	}
+
+	var (
+		processing 	bool
+		cancel 		context.CancelFunc
+		resultCh	chan result
+	)
 
 	for {
 		select {
+
+		case <-ctx.Done():
+			log.Println("Outbox worker shutting down...")
+
+			if !processing {
+				log.Println("Outbox worker stopped.")
+				return
+			}
+
+			// Ask the active operation to stop
+			cancel()
+
+			timer := time.NewTimer(10 * time.Second)
+			defer timer.Stop()
+
+			select {
+			case result := <-resultCh:
+				if result.err != nil {
+					log.Printf("Error processing outboxx event: %v", result.err)
+				}
+				log.Printf("Current operation finished.")
+			case <- timer.C:
+				log.Printf("Shutdown grace period expired")
+			}
+			log.Printf("Outbox worker stopped.")
+			return
+
 		case <-ticker.C:
 			if processing {
 				continue
 			}
 
 			processing = true
-			operationCtx, cancel := context.WithCancel(context.Background())
-			cancelOperation = cancel
+			resultCh = make(chan result, 1)
+			
+			operationCtx, operationCancel := context.WithCancel(ctx)
+			cancel = operationCancel
+			
 			go func() {
 				err := w.ProcessOne(operationCtx)
-				result <- err
+				resultCh <- result{err: err}
 			}()
 
-		case err := <-result :
+		case result := <-resultCh:
 			processing = false
-			cancelOperation()
-			cancelOperation = nil
+			cancel()
+			cancel = nil
+			resultCh = nil
 			
-			if err != nil {
-				log.Printf("Error processing outbox event: %v", err)
+			if result.err != nil {
+				log.Printf("Error processing outbox event: %v", result.err)
 			}
-		
-		case <-ctx.Done():
-			log.Println("Outbox worker shutting down...")
-
-			shutdownTimer := time.NewTimer(10 * time.Second)
-			defer shutdownTimer.Stop()
-
-			select {
-			case err := <- result :
-				if err != nil {
-					log.Printf("Error processing outbox event: %v", err)
-				}
-				cancelOperation()
-    			cancelOperation = nil
-				log.Printf("Current operation finished");
-
-			case <- shutdownTimer.C :
-				log.Printf("Shutdown grace period expired")
-				cancelOperation()
-
-				err := <-result
-				if err != nil {
-					log.Printf("Error processing outbox event: %v", err)
-				}
-			}
-            log.Println("Outbox worker stopped")
-			return
 		}
 	}
 }
